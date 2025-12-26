@@ -141,7 +141,7 @@
 import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
-
+import os
 import gradio as gr
 
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -275,5 +275,11 @@ with gr.Blocks(theme=gr.themes.Glass()) as app:
 # --------------------------------------------------
 # RENDER ENTRYPOINT
 # --------------------------------------------------
+#if __name__ == "__main__":
+  #  app.launch(server_name="0.0.0.0", server_port=7860)
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860)),
+        show_error=True
+    )
