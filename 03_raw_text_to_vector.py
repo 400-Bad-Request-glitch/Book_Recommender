@@ -28,17 +28,59 @@ books=pd.read_csv("books_cleaned.csv")
 #vector search
 #isbn -->identifier
 #text loader in lang chain doesnt work with pandas dataframe 
-books["tagged_description"].to_csv("tagged_description.txt",sep="\n",index=False,header=False)
-raw_documents=TextLoader("tagged_description.txt").load()
-text_splitter=CharacterTextSplitter(chunk_size=0,chunk_overlap=0,seperator="\n")
+#books["tagged_description"].to_csv("tagged_description.txt",sep="\n",index=False,header=False)
+books["tagged_description"].to_csv(
+    "tagged_description.txt",
+    index=False,
+    header=False,
+    encoding="utf-8"
+)
+
+#raw_documents=TextLoader("tagged_description.txt").load()
+raw_documents = TextLoader(
+    "tagged_description.txt",
+    encoding="utf-8"
+).load()
+
+#text_splitter=CharacterTextSplitter(chunk_size=0,chunk_overlap=0,seperator="\n")4
+text_splitter = CharacterTextSplitter(
+    chunk_size=10000,
+    chunk_overlap=0,
+    separator="\n"
+)
 documents=text_splitter.split_documents(raw_documents)
 #building vector database
-db_books=Chroma.from_documents(documents,embedding=OpenAIEmbeddings())
+#db_books=Chroma.from_documents(documents,embedding=OpenAIEmbeddings())
 #creating vector database
+#from langchain.embeddings import HuggingFaceEmbeddings
+#from langchain.vectorstores import Chroma
+
+from langchain_huggingface import HuggingFaceEmbeddings
+
+from langchain_chroma import Chroma
+
+
+embedding = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+db_books = Chroma.from_documents(
+    documents,
+    embedding=embedding,
+    persist_directory="./chroma_books"
+)
+
 #querying now
 query="A book to tach children about nature"
 docs=db_books.similarity_search(query,k=10)
-books[books["isbn13"]== int(docs[0].page_content.split()[0].strip())]
+#books[books["isbn13"]== int(docs[0].page_content.split()[0].strip())]
+#isbn = docs[0].page_content.split()[0].strip().strip('"')
+#books[books["isbn13"] == int(isbn)]
+
+isbn = docs[0].page_content.split()[0].strip().replace('"', '').replace("'", "")
+books[books["isbn13"] == int(isbn)]
+
+
 def retrieve_semantic_recommendations(query:str,top_k:int=10,)->pd.DataFrame:
     recs=db_books.similarity_search(query,k=50)
     books_list=[]
@@ -70,7 +112,7 @@ category_mapping = {'Fiction' : "Fiction",
  'Juvenile Nonfiction': "Children's Nonfiction",
  'Science': "Nonfiction",
  'Poetry': "Fiction"}#1:17:23
-books["simple_cateories"]=books["categories"].map(category_mapping)
+books["simple_categories"]=books["categories"].map(category_mapping)
 #1:18:03
 #books[(books["simple_categories"].isna())]
 #books[~(books["simple_categories"].isna())]
@@ -102,11 +144,11 @@ def generate_predictions(sequence,categories):
 from tqdm import tqdm
 actual_cats=[]
 predicted_cats=[]
-for i in tqdm(range[0,300]):
+for i in tqdm(range(0,300)):
     sequence=books.loc[books["simple_categories"]=="Fiction","description"].reset_index(drop=True)[i]
     predicted_cats+=[generate_predictions(sequence,fiction_categories)]
     actual_cats+=["Fiction"]
-for i in tqdm(range[0,300]):
+for i in tqdm(range(0,300)):
     sequence=books.loc[books["simple_categories"]=="Nonfiction","description"].reset_index(drop=True)[i]
     predicted_cats+=[generate_predictions(sequence,fiction_categories)]
     actual_cats+=["Nonfiction"]
@@ -124,12 +166,19 @@ missing_cats=books.loc[books["simple_categories"].isna(),["isbn13","description"
 for i in tqdm(range(0,len(missing_cats))):
     sequence=missing_cats["description"][i]
     predicted_cats+=[generate_predictions(sequence,fiction_categories)]
-    isbns+=[missing_cats["isbns13"][i]]
+    #isbns+=[missing_cats["isbns13"][i]]
+    isbns += [missing_cats["isbn13"][i]]
+
 #1:31:06
 missing_predicted_df=pd.DataFrame({"isbn13":isbns,"predicted_categories":predicted_cats})
 #merging to original df
 books=pd.merge(books,missing_predicted_df,on="isbn13",how="left")
-books["simple_categories"]=np.where(books["simple_categories"].isna(),books["simple_categories"])
+#books["simple_categories"]=np.where(books["simple_categories"].isna(),books["simple_categories"])
+books["simple_categories"] = np.where(
+    books["simple_categories"].isna(),
+    books["predicted_categories"],
+    books["simple_categories"]
+)
 books=books.drop(columns=["predicted_categories"])
 books[books["categories"].str.lower().isin([
     "romance",
