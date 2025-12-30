@@ -132,7 +132,7 @@ from langchain_chroma import Chroma
 
 import gradio as gr
 
-load_dotenv()
+#load_dotenv()
 
 # --------------------------------------------------
 # LOAD BOOK DATA
